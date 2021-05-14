@@ -17,30 +17,30 @@ class AndroidNDKInstallerConan(ConanFile):
     no_copy_source = True
     exports_sources = ["cmake-wrapper.cmd", "cmake-wrapper"]
 
-    settings = {"os_build": ["Windows", "Linux", "Macos"],
-                "arch_build": ["x86", "x86_64"],
-                "compiler": ["clang"],
-                "os": ["Android"],
-                "arch": ["x86", "x86_64", "armv7", "armv8"]}
+    settings = {"os": ["Windows", "Linux", "Macos"],
+                "arch": ["x86", "x86_64"],
+                "compiler": None,
+                "os_target": ["Android"],
+                "arch_target": ["x86", "x86_64", "armv7", "armv8"]}
+    options = {
+        "target_api_level": "ANY",
+        "target_libcxx": ["c++_shared", "c++_static"],
+    }
 
     def configure(self):
-        api_level = int(str(self.settings.os.api_level))
-        if self.settings.os_build in ["Linux", "Macos"] and self.settings.arch_build == "x86":
+        api_level = int(str(self.options.target_api_level))
+        if self.settings.os in ["Linux", "Macos"] and self.settings.arch == "x86":
             raise ConanInvalidConfiguration("x86 host is not supported "
-                                            "for %s" % self.settings.os_build)
+                                            "for %s" % self.settings.os)
         if api_level < 16:
             raise ConanInvalidConfiguration("minumum API version for architecture %s is 16, "
-                                            "but used %s" % (self.settings.arch, api_level))
-        if self.settings.arch in ["x86_64", "armv8"] and api_level < 21:
+                                            "but used %s" % (self.settings.arch_target, api_level))
+        if self.settings.arch_target in ["x86_64", "armv8"] and api_level < 21:
             raise ConanInvalidConfiguration("minumum API version for architecture %s is 21, "
-                                            "but used %s" % (self.settings.arch, api_level))
-        if self.settings.compiler.version != "8":
-            raise ConanInvalidConfiguration("only Clang 8 is supported")
-        if not str(self.settings.compiler.libcxx) in ["c++_shared", "c++_static"]:
-            raise ConanInvalidConfiguration("only libc++ standard library is supported")
+                                            "but used %s" % (self.settings.arch_target, api_level))
 
     def source(self):
-        variant = "{0}-{1}".format(self._platform, self.settings.arch_build)
+        variant = "{0}-{1}".format(self._platform, self.settings.arch)
         archive_name = "android-ndk-{0}-{1}.zip".format(self.version, variant)
         source_url = "https://dl.google.com/android/repository/" + archive_name
 
@@ -54,22 +54,22 @@ class AndroidNDKInstallerConan(ConanFile):
     def _platform(self):
         return {"Windows": "windows",
                 "Macos": "darwin",
-                "Linux": "linux"}.get(str(self.settings.os_build))
+                "Linux": "linux"}.get(str(self.settings.os))
 
     @property
     def _android_abi(self):
         return {"x86": "x86",
                 "x86_64": "x86_64",
                 "armv7": "armeabi-v7a",
-                "armv8": "arm64-v8a"}.get(str(self.settings.arch))
+                "armv8": "arm64-v8a"}.get(str(self.settings.arch_target))
 
     @property
     def _llvm_triplet(self):
         arch = {'armv7': 'arm',
                 'armv8': 'aarch64',
                 'x86': 'i686',
-                'x86_64': 'x86_64'}.get(str(self.settings.arch))
-        abi = 'androideabi' if self.settings.arch == 'armv7' else 'android'
+                'x86_64': 'x86_64'}.get(str(self.settings.arch_target))
+        abi = 'androideabi' if self.settings.arch_target == 'armv7' else 'android'
         return '%s-linux-%s' % (arch, abi)
 
     @property
@@ -77,8 +77,8 @@ class AndroidNDKInstallerConan(ConanFile):
         arch = {'armv7': 'armv7a',
                 'armv8': 'aarch64',
                 'x86': 'i686',
-                'x86_64': 'x86_64'}.get(str(self.settings.arch))
-        abi = 'androideabi' if self.settings.arch == 'armv7' else 'android'
+                'x86_64': 'x86_64'}.get(str(self.settings.arch_target))
+        abi = 'androideabi' if self.settings.arch_target == 'armv7' else 'android'
         return '%s-linux-%s' % (arch, abi)
 
     def _fix_permissions(self):
@@ -116,7 +116,7 @@ class AndroidNDKInstallerConan(ConanFile):
         self.copy("cmake-wrapper.cmd")
         self.copy("cmake-wrapper")
 
-        if self.settings.arch_build == "x86":
+        if self.settings.arch == "x86":
             tools.replace_in_file(os.path.join(self.package_folder, "build", "cmake", "android.toolchain.cmake"),
                                   "set(ANDROID_HOST_TAG windows-x86_64)",
                                   "set(ANDROID_HOST_TAG windows)", strict=False)
@@ -124,7 +124,7 @@ class AndroidNDKInstallerConan(ConanFile):
 
     @property
     def _host(self):
-        return self._platform if self.settings.arch_build == "x86" else self._platform + "-x86_64"
+        return self._platform if self.settings.arch == "x86" else self._platform + "-x86_64"
 
     @property
     def _ndk_root(self):
@@ -132,10 +132,10 @@ class AndroidNDKInstallerConan(ConanFile):
 
     def _tool_name(self, tool):
         if 'clang' in tool:
-            suffix = '.cmd' if self.settings.os_build == 'Windows' else ''
-            return '%s%s-%s%s' % (self._clang_triplet, self.settings.os.api_level, tool, suffix)
+            suffix = '.cmd' if self.settings.os == 'Windows' else ''
+            return '%s%s-%s%s' % (self._clang_triplet, self.options.target_api_level, tool, suffix)
         else:
-            suffix = '.exe' if self.settings.os_build == 'Windows' else ''
+            suffix = '.exe' if self.settings.os == 'Windows' else ''
             return '%s-%s%s' % (self._llvm_triplet, tool, suffix)
 
     def _define_tool_var(self, name, value):
@@ -146,8 +146,8 @@ class AndroidNDKInstallerConan(ConanFile):
 
     def package_id(self):
         self.info.include_build_settings()
-        del self.info.settings.arch
-        del self.info.settings.os.api_level
+        del self.info.settings.arch_target
+        del self.info.options.target_api_level
 
     @staticmethod
     def _chmod_plus_x(filename):
@@ -174,11 +174,11 @@ class AndroidNDKInstallerConan(ConanFile):
         self.output.info('Creating self.cpp_info.sysroot: %s' % ndk_sysroot)
         self.cpp_info.sysroot = ndk_sysroot
 
-        self.output.info('Creating ANDROID_NATIVE_API_LEVEL environment variable: %s' % self.settings.os.api_level)
-        self.env_info.ANDROID_NATIVE_API_LEVEL = str(self.settings.os.api_level)
+        self.output.info('Creating ANDROID_NATIVE_API_LEVEL environment variable: %s' % self.options.target_api_level)
+        self.env_info.ANDROID_NATIVE_API_LEVEL = str(self.options.target_api_level)
 
         self._chmod_plus_x(os.path.join(self.package_folder, "cmake-wrapper"))
-        cmake_wrapper = "cmake-wrapper.cmd" if self.settings.os_build == "Windows" else "cmake-wrapper"
+        cmake_wrapper = "cmake-wrapper.cmd" if self.settings.os == "Windows" else "cmake-wrapper"
         cmake_wrapper = os.path.join(self.package_folder, cmake_wrapper)
         self.output.info('Creating CONAN_CMAKE_PROGRAM environment variable: %s' % cmake_wrapper)
         self.env_info.CONAN_CMAKE_PROGRAM = cmake_wrapper
@@ -201,10 +201,10 @@ class AndroidNDKInstallerConan(ConanFile):
         self.env_info.READELF = self._define_tool_var('READELF', 'readelf')
         self.env_info.ELFEDIT = self._define_tool_var('ELFEDIT', 'elfedit')
 
-        self.env_info.ANDROID_PLATFORM = "android-%s" % self.settings.os.api_level
+        self.env_info.ANDROID_PLATFORM = "android-%s" % self.options.target_api_level
         self.env_info.ANDROID_TOOLCHAIN = "clang"
         self.env_info.ANDROID_ABI = self._android_abi
-        self.env_info.ANDROID_STL = str(self.settings.compiler.libcxx)
+        self.env_info.ANDROID_STL = str(self.options.target_libcxx)
 
         self.env_info.CMAKE_FIND_ROOT_PATH_MODE_PROGRAM = "BOTH"
         self.env_info.CMAKE_FIND_ROOT_PATH_MODE_LIBRARY = "BOTH"

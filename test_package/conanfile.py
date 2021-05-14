@@ -4,7 +4,7 @@ import subprocess
 
 
 class TestPackageConan(ConanFile):
-    settings = "os", "compiler", "build_type", "arch"
+    settings = "os", "compiler", "build_type", "arch", "os_target", "arch_target"
     generators = "cmake"
 
     def build(self):
@@ -31,13 +31,13 @@ class TestPackageConan(ConanFile):
                    'x86': 'Intel 80386',
                    'x86_64': 'Advanced Micro Devices X86-64',
                    'mips': 'MIPS R3000',
-                   'mips64': 'MIPS R3000'}.get(str(self.settings.arch))
+                   'mips64': 'MIPS R3000'}.get(str(self.settings.arch_target))
         elf_class = {'armv7': 'ELF32',
                      'armv8': 'ELF64',
                      'x86': 'ELF32',
                      'x86_64': 'ELF64',
                      'mips': 'ELF32',
-                     'mips64': 'ELF64'}.get(str(self.settings.arch))
+                     'mips64': 'ELF64'}.get(str(self.settings.arch_target))
         if readelf['Machine'] != machine:
             raise Exception('incorrect machine, expected %s, but found %s' % (machine, readelf['Machine']))
         if readelf['Class'] != elf_class:
